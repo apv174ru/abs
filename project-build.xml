@@ -1,0 +1,352 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<!--
+   Скрипт ant-сборки проекта ИБС
+
+   properties:
+      PROJECT  - название проекта - имя файла
+      BUILD    - тип проекта: DLL,EXE,LIB,LIBDLL [DLL]
+      XPP      - тип приложения: GUI, HYBRID [консольное]
+      DEBUG    - если установлено, сборка с отладочной информацией
+      TEST     - если установлено, сборка юнит-теста
+      XPPPATH  - каталог исполняемых файлов xpp
+      MAKE.EXE - каталог сборки приложения
+-->
+<project default="build">
+  <!--- - - - - - - - - - - - Инициализация - - - - - - - - - - - - -->
+  <import file="${ant.dir}\init-${platform}.xml"/>
+  <target name="init-test" if="TEST">
+    <setprop name="PROJECT" value="test"/>
+    <setprop name="BUILD" value="DLL"/>
+  </target>
+  <target name="init" depends="init-test">
+    <fail unless="PROJECT" message="PROJECT property is not set"/>
+    <condition property="debug-obj" value="b" else="">
+      <isset property="DEBUG"/>
+    </condition>
+    <condition property="xmetrics-obj" value="m" else="">
+      <isset property="XMETRICS"/>
+    </condition>
+    <condition property="test-obj" value="t" else="">
+      <isset property="TEST"/>
+    </condition>
+    <condition property="link-debug" value="/DEBUG" else="">
+      <isset property="DEBUG"/>
+    </condition>
+    <condition property="compile-debug" value="/b /DDEBUG" else="">
+      <isset property="DEBUG"/>
+    </condition>
+    <condition property="compile-test" value="/D_TEST_" else="">
+      <isset property="TEST"/>
+    </condition>
+    <property name="build-path" value=".${MAKE.OBJ}${debug-obj}${test-obj}${xmetrics-obj}${platform-obj}"/>
+    <property name="lnkfile" value="${build-path}\${PROJECT}.lnk"/>
+    <condition property="IF_BUILD_LIB">
+      <equals arg1="${BUILD}" arg2="LIB" casesensitive="false"/>
+    </condition>
+    <condition property="IF_BUILD_OBJ">
+      <equals arg1="${BUILD}" arg2="OBJ" casesensitive="false"/>
+    </condition>
+    <condition property="IF_BUILD_EXE">
+      <not>
+        <or>
+          <isset property="IF_BUILD_LIB"/>
+          <isset property="IF_BUILD_OBJ"/>
+        </or>
+      </not>
+    </condition>
+    <condition property="IF_BUILD_EXP">
+      <equals arg1="${BUILD}" arg2="LIBDLL" casesensitive="false"/>
+    </condition>
+    <condition property="IF_VCS_INFO">
+      <and>
+        <isset property="DEPLOY"/>
+        <not>
+          <isset property="IF_BUILD_OBJ"/>
+        </not>
+        <or>
+          <available file=".svn"/>
+          <available file=".git"/>
+        </or>
+      </and>
+    </condition>
+    <condition property="vcs-exe" value="git" else="svn">
+      <available file=".git"/>
+    </condition>
+    <condition property="vcs-argline" value="log -n1 --date=unix --format=Revision:_%cd%nLastChangedRev:_%h%nLastChangedAuthor:_%an" else="info . -r HEAD">
+      <!-- %n line feed, %H commit hash, %cd commit date (unixtime), %an author name -->
+      <available file=".git"/>
+    </condition>
+    <condition property="force-build" value="true" else="false">
+      <isset property="DEPLOY"/>
+    </condition>
+    <setprop name="ARCLIST" value="${ARCLIST} ${PROJECT}.arc">
+      <available file="${basedir}\${PROJECT}.arc"/>
+    </setprop>
+    <setprop name="LIBLIST" value="${LIBLIST} -${PROJECT}">
+      <equals arg1="${BUILD}" arg2="LIBDLL" casesensitive="false"/>
+    </setprop>
+    <property name="BUILD" value="DLL"/>
+    <setprop name="BUILD" value="EXE">
+      <or>
+        <equals arg1="${XPP}" arg2="GUI" casesensitive="false"/>
+        <equals arg1="${XPP}" arg2="HYBRID" casesensitive="false"/>
+        <equals arg1="${DEBUG}" arg2="true" casesensitive="false"/>
+        <equals arg1="${DEBUG}" arg2="EXE" casesensitive="false"/>
+        <equals arg1="${DEBUG}" arg2="" casesensitive="false"/>
+      </or>
+    </setprop>
+    <condition property="EXT" value="exe" else="dll">
+      <equals arg1="${BUILD}" arg2="EXE" casesensitive="false"/>
+    </condition>
+    <condition property="MAKE.EXE" value="${build-path}" else="${basedir}">
+      <isset property="DEPLOY"/>
+    </condition>
+    <property name="exe-filename" value="${MAKE.EXE}\${PROJECT}.${EXT}"/>
+    <setprop name="OBJLIST" value="initx errorsys appsys dbesys ${OBJLIST}">
+      <and>
+        <equals arg1="${BUILD}" arg2="EXE" casesensitive="false"/>
+        <not>
+          <equals arg1="${XPP}" arg2="GUI" casesensitive="false"/>
+        </not>
+      </and>
+    </setprop>
+    <setprop name="PRGLIST" value="${PRGLIST} **\test\**\*">
+      <and>
+        <isset property="TEST"/>
+        <not>
+          <isset property="TESTUI"/>
+        </not>
+      </and>
+    </setprop>
+    <setprop name="PRGLIST" value="${PRGLIST} -**\test\**\*">
+      <and>
+        <not>
+          <isset property="TEST"/>
+        </not>
+      </and>
+    </setprop>
+    <prglist srcdir="${SRCPATH}">
+      <filekit name="prglist" extension="prg" dir="${basedir}" pattern="${PRGLIST} ${addon-prg}"/>
+      <filekit name="objlist" extension="obj" path="${LIBPATH}\${platform};${LIBPATH}\common" pattern="${OBJLIST}"/>
+      <filekit name="liblist" extension="lib" path="${XPPPATH}\lib;${LIBPATH}\${platform};${LIBPATH}\common" pattern="@\xbin\ibslibs.lnk ${LIBLIST}"/>
+    </prglist>
+    <tstamp>
+      <format property="tstamp" pattern="dd/MM/yyyy HH:mm:ss"/>
+    </tstamp>
+    <condition property="user" value="${env.SVN_USER}" else="${user.name}">
+      <isset property="env.SVN_USER"/>
+    </condition>
+    <property name="lib-filename" value="${build-path}\${PROJECT}.lib"/>
+    <property name="res-filename" value="${build-path}\${PROJECT}.res"/>
+    <property name="compile-opt" value="${COMPILE_OPT} ${compile-debug} ${compile-test}"/>
+    <property name="link-opt" value="${LINK_OPT} ${link-debug}"/>
+    <condition property="subdir" value="" else="${platform}">
+      <equals arg1="${platform}" arg2="xpp182" casesensitive="false"/>
+    </condition>
+  </target>
+  <!--- - - - - - - - - - Компиляция xpp (.obj) - - - - - - - - - - -->
+  <target name="compile" depends="init,init_compile" description="Компиляция prg-файлов">
+    <mkdir dir="${build-path}"/>
+    <attrib file="${build-path}" type="dir" hidden="true"/>
+    <apply executable="${compile-cmd}" dir="${build-path}" dest="${build-path}" failonerror="true">
+      <env key="INCLUDE" value="${compile-path}"/>
+      <arg line="${compile-arg}"/>
+      <srclist from="prglist"/>
+      <mapper>
+        <chainedmapper>
+          <globmapper from="*.prg" to="*.obj" casesensitive="false"/>
+          <flattenmapper/>
+        </chainedmapper>
+      </mapper>
+    </apply>
+  </target>
+  <target name="syntax" depends="init,init_compile">
+    <apply executable="${compile-cmd}" dir="${basedir}" failonerror="false" append="true" errorproperty="dummy" outputproperty="warnings.log" resultproperty="rdummy">
+      <env key="INCLUDE" value="${compile-path}"/>
+      <arg line="${compile-arg} ${compile-syntax}"/>
+      <srclist from="prglist"/>
+    </apply>
+    <echo message="${warnings.log}"/>
+    <fail message="Warnings detected">
+      <condition>
+        <length string="${warnings.log}" when="greater" length="0"/>
+      </condition>
+    </fail>
+  </target>
+  <!-- - - - - - - - - Общий target для всех билдов - - - - - - - - -->
+  <target name="build" depends="build_lib,build_exe"/>
+  <!-- - - - - - - - Сборка статической библиотеки (.lib) - - - - - -->
+  <target name="build_lib" if="IF_BUILD_LIB" depends="compile,init_lib" description="Сборка статической библиотеки">
+    <apply executable="${lib-cmd}" failonerror="true" parallel="true" skipemptyfilesets="true" addsourcefile="false">
+      <arg line="${lib-arg}"/>
+      <srclist from="prglist" to="${build-path}\!.obj" output="${lnkfile}" append="false"/>
+      <srclist from="objlist" output="${lnkfile}"/>
+      <mapper type="merge" to="${lib-filename}"/>
+    </apply>
+  </target>
+  <!-- - - - - - - - Генерация ресурса версии (ver.arc) - - - - - - -->
+  <target name="vcs_info" if="IF_VCS_INFO" depends="init" description="Загрузка информации о версии из svn/git">
+    <property name="VER_ARC" value="${build-path}\ver.arc"/>
+    <property name="REV_FILE" value="${build-path}\revision"/>
+    <setprop name="ARCLIST" value="${ARCLIST} ${VER_ARC}"/>
+    <exec executable="${vcs-exe}" outputproperty="vcsinfo" failonerror="true" logError="true">
+      <arg line="${vcs-argline}"/>
+    </exec>
+    <vcslog property="vcsinfo"/>
+    <loadfile srcFile="${REV_FILE}" property="revision" quiet="true"/>
+    <condition property="IF_BUILD_VER">
+      <or>
+        <not>
+          <equals arg1="${vcsinfo.Revision}" arg2="${revision}"/>
+        </not>
+        <not>
+          <uptodate targetfile="${VER_ARC}" srcfile="${REV_FILE}"/>
+        </not>
+      </or>
+    </condition>
+  </target>
+  <target name="build_ver" if="IF_BUILD_VER" depends="vcs_info" description="Создание файла ресурса версии">
+    <property name="APPNAME" value="Приложение ИБС"/>
+    <tstamp>
+      <format property="YEAR" pattern="yyyy"/>
+    </tstamp>
+    <echo file="${VER_ARC}" encoding="cp866">VERSION
+         "CompanyName"      = "ПАО"
+         "LegalCopyright"   = "Copyright (c) ПАО 1994-${YEAR}"
+         "ProductName"      = "ИБС"
+         "ProductVersion"   = "${vcsinfo.Revision}"
+         "FileDescription"  = "${APPNAME}"
+         "FileVersion"      = "${vcsinfo.LastChangedRev}"
+         "Comment"          = "head:${vcsinfo.Revision} last:${vcsinfo.LastChangedRev} ${vcsinfo.LastChangedAuthor} ${platform} ${tstamp}"
+         "OriginalFilename" = "${PROJECT}.${EXT}"
+      </echo>
+    <touch file="${VER_ARC}"/>
+    <!-- Борьба с "Warning: OBJX\ver.arc modified in the future" в build_res -->
+    <echo file="${REV_FILE}" message="${vcsinfo.Revision}"/>
+  </target>
+  <!-- - - - - - - - Генерация ресурса шаблонов dok.arc - - - - - - -->
+  <target name="dok_arc" depends="init" description="Создание файла ресурсов шаблонов">
+    <property name="dok.arc" value="${build-path}\dok.arc"/>
+    <apply executable="cmd" dir="${basedir}" output="${dok.arc}" failonerror="false" addsourcefile="false" skipemptyfilesets="true" failifexecutionfails="false">
+      <arg value="/c"/>
+      <!--arg value="echo off &amp;&amp; FOR %i IN (${basedir}/resource/*.dok) DO echo USERDEF DOK %~ni = FILE &quot;%~nxi&quot;"/-->
+      <arg value="echo off &amp;&amp; FOR /F &quot;tokens=2 delims=. &quot; %i IN ('find &quot;&quot; resource\*.dok') DO echo USERDEF DOK %~ni = FILE &quot;%~ni.DOK&quot;"/>
+      <fileset dir="${basedir}/resource" includes="*.dok" erroronmissingdir="false"/>
+      <mapper type="merge" to="${dok.arc}"/>
+    </apply>
+    <setprop name="ARCLIST" value="${ARCLIST} ${dok.arc}">
+      <available file="${dok.arc}"/>
+    </setprop>
+  </target>
+  <!-- - - - - - - - - - Компиляция ресурсов (.res) - - - - - - - - -->
+  <target name="build_res" if="IF_BUILD_RES" depends="init,build_ver,dok_arc,init_res" description="Компиляция ресурсов">
+    <apply executable="${res-cmd}" dir="${basedir}" dest="${build-path}" failonerror="true" relative="true" parallel="true" addsourcefile="false" skipemptyfilesets="true">
+      <arg line="${res-arg}"/>
+      <env key="PATH" value="${env.Path};${XPPPATH}\bin"/>
+      <fileset dir="${basedir}" includes="${ARCLIST}" casesensitive="false"/>
+      <mapper type="merge" to="${PROJECT}.res"/>
+    </apply>
+  </target>
+  <!-- - - - - Создание библиотеки импорта и файла экспорта - - - - -->
+  <target name="build_exp" if="IF_BUILD_EXP" depends="compile,init_exp" description="Создание библиотеки импорта и файла экспорта">
+    <apply executable="${filt-cmd}" failonerror="true" parallel="true" dest="${build-path}" skipemptyfilesets="true" addsourcefile="false">
+      <arg line="/f:${build-path}\${PROJECT}.def @${lnkfile}"/>
+      <srclist from="prglist" to="${build-path}\!.obj" output="${lnkfile}" append="false"/>
+      <mapper type="merge" to="${PROJECT}.def"/>
+    </apply>
+    <apply executable="${aimplib-cmd}" failonerror="true" dir="${build-path}" dest="${build-path}">
+      <fileset file="${build-path}\${PROJECT}.def" casesensitive="false"/>
+      <mapper>
+        <compositemapper>
+          <globmapper from="*.def" to="*.exp" casesensitive="false"/>
+          <globmapper from="*.def" to="*.lib" casesensitive="false"/>
+        </compositemapper>
+      </mapper>
+    </apply>
+  </target>
+  <!--- - - - - - - - - - - Сборка приложения - - - - - - - - - - - -->
+  <!-- Создание уникального временного каталога %TEMP% для одновременной сборки приложений сервером svn -->
+  <condition property="DO_TEMP_DIR">
+    <or>
+      <isset property="DEPLOY"/>
+      <isset property="TEST"/>
+    </or>
+  </condition>
+  <target name="temp_dir" if="DO_TEMP_DIR">
+    <tempfile property="temp-dir" destdir="${env.TEMP}" prefix="alink-" deleteonexit="true"/>
+    <mkdir dir="${temp-dir}"/>
+  </target>
+  <target name="sync_lib" if="env.XPP_HOME" depends="init" description="Обновление библиотек">
+    <sync todir="${LIBPATH}\${platform}">
+      <fileset dir="${SRCLIBPATH}\${platform}"/>
+    </sync>
+    <sync todir="${LIBPATH}\common">
+      <fileset dir="${SRCLIBPATH}\common"/>
+    </sync>
+  </target>
+  <target name="build_exe" if="IF_BUILD_EXE" depends="compile,build_res,build_exp,init_link,temp_dir,sync_lib" description="Сборка приложения">
+    <condition property="dll-option" value="/DLL" else="">
+      <equals arg1="${EXT}" arg2="dll"/>
+    </condition>
+    <property name="temp-dir" value="${env.TEMP}"/>
+    <echo file="${lnkfile}" message=""/>
+    <apply executable="${link-cmd}" failonerror="${failonerror}" parallel="true" skipemptyfilesets="true" addsourcefile="false" force="${force-build}">
+      <env key="LIB" value="${build-path};${LIBPATH}\${platform};${LIBPATH}\common;${lib-path};${LIB_ADD}"/>
+      <env key="TEMP" value="${temp-dir}"/>
+      <env key="TMP" value="${temp-dir}"/>
+      <arg line="${link-arg} /VERSION:${platform-id} ${dll-option} "/>
+      <srclist output="${lnkfile}" files="${LIBPATH}\${platform}\ut.obj" if="TEST"/>
+      <srclist output="${lnkfile}" from="prglist" to="${build-path}\!.obj"/>
+      <srclist output="${lnkfile}" from="objlist"/>
+      <srclist output="${lnkfile}" from="liblist"/>
+      <srclist output="${lnkfile}" files="${res-filename}" ignoremissing="true"/>
+      <srclist output="${lnkfile}" files="${PROJECT}.exp" to="${build-path}\!.!" if="IF_BUILD_EXP"/>
+      <mapper type="merge" to="${exe-filename}"/>
+    </apply>
+    <exec executable="${SRCPATH}\xbin\echoftime.bat" failifexecutionfails="false">
+      <arg line="${exe-filename}"/>
+    </exec>
+  </target>
+  <!-- - - - - - - - - - - Установка приложения - - - - - - - - - - -->
+  <target name="deploy_lib" if="IF_BUILD_LIB" depends="build_lib" description="Установка библиотеки">
+    <basename property="dst-file" file="${lib-filename}"/>
+    <length property="dst-size" file="${lib-filename}"/>
+    <retry retrycount="10" retrydelay="5000">
+      <copy file="${lib-filename}" preservelastmodified="true" todir="${SRCLIBPATH}\${platform}" verbose="true"/>
+    </retry>
+  </target>
+  <target name="deploy_obj" if="IF_BUILD_OBJ" depends="compile" description="Установка .obj файлов">
+    <copy preservelastmodified="true" todir="${SRCLIBPATH}\${platform}" verbose="true" flatten="true">
+      <srclist from="prglist" to="${build-path}\!.obj"/>
+    </copy>
+  </target>
+  <target name="deploy_exp" if="IF_BUILD_EXP" depends="build_exp" description="Установка библиотеки импорта">
+    <copy file="${build-path}\${PROJECT}.lib" preservelastmodified="true" todir="${SRCLIBPATH}\${platform}" verbose="true"/>
+  </target>
+  <target name="deploy_exe" if="IF_BUILD_EXE" depends="build_ver,build_exe" description="Установка приложения">
+    <!-- Подпись Authenticode https://ebourg.github.io/jsign/ -->
+    <jsign file="${exe-filename}" name="Приложение ИБС" certfile="${SRCPATH}\authenticode\authenticode.p7b" keyfile="${SRCPATH}\authenticode\authenticode.pem" keypass="verso" alg="SHA-1"/>
+    <!-- tsaurl="http://time.certum.pl" -->
+    <basename property="dst-file" file="${exe-filename}"/>
+    <length property="dst-size" file="${exe-filename}"/>
+    <copy file="${work-path}\${subdir}\${dst-file}" todir="${work-path}\OLD\${subdir}" preservelastmodified="true" verbose="true" failonerror="false"/>
+    <retry retrycount="5" retrydelay="3000">
+      <copy file="${exe-filename}" todir="${work-path}\${subdir}" preservelastmodified="true" verbose="true"/>
+    </retry>
+    <copy file="${exe-filename}" todir="${test-path}\${subdir}" preservelastmodified="true" verbose="true" failonerror="false"/>
+  </target>
+  <target name="deploy" if="DEPLOY" depends="deploy_obj,deploy_lib,deploy_exe,deploy_exp" description="Установка приложения на рабочий и тестовый сервер">
+    <property name="log" value="${tstamp} r.${vcsinfo.Revision} ${dst-file} ${user} ${platform} ${dst-size}"/>
+    <echo message="${log}"/>
+    <echo file="${SRCPATH}\deploy.log" append="true" message="${log}${line.separator}"/>
+  </target>
+  <target name="test" depends="build_exe" description="Запуск тестов">
+    <property name="TEST_OPT" value=""/>
+    <exec executable="${llogin}\xboot.exe" dir="${MAKE.EXE}" failonerror="true" errorproperty="error-log">
+      <env key="IBS_CONF" value="test"/>
+      <env key="IBS_INI" value="${llogin}\ibs.ini"/>
+      <arg line="/wait /d /i /ngui /q1 ${exe-filename} /b /a ${TEST_OPT}"/>
+    </exec>
+    <echo message="${error-log}"/>
+  </target>
+</project>

@@ -1,0 +1,7 @@
+<project>
+   <property name="XPPPATH" value="${XPP_HOME}\xppw32_190"/>
+   <property name="platform-id" value="1.190"/>
+   <property name="platform-obj" value="190"/>
+   <property name="xpp-lib" value="xbtbase1.lib xbtbase2.lib xpprt0.lib xpprt1.lib xppsys.lib ascom10.lib asxml10.lib asinet10.lib"/>
+   <import file="${ant.dir}\init-xpp.xml"/>
+</project>

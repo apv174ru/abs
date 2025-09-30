@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<project default="start">
+  <!-- - - - - - - - - - - Свойства - - - - - - - - - - - -->
+  <target name="pre-def">
+    <property environment="env"/>
+    <property name="SRCPATH" value="\\diamond\stock\ibs\prg"/>
+    <!-- каталог исходных файлов -->
+    <property name="SDK" value="\\diamond\stock\ibs\sdk"/>
+    <!-- каталог sdk -->
+    <property name="work-root" value="\\diamond\bank\sysbank"/>
+    <property name="test-root" value="\\hobby\prg_bank\sysbank"/>
+    <property name="work-path" value="${work-root}\program"/>
+    <!-- каталог установки приложений -->
+    <property name="test-path" value="${test-root}\program"/>
+    <!-- каталог установки приложений -->
+    <property name="work-putbin" value="${work-root}\putbin"/>
+    <!-- каталог запуска приложений -->
+    <property name="test-putbin" value="${test-root}\putbin"/>
+    <!-- каталог запуска приложений -->
+    <property name="llogin" value="\\diamond\l\login"/>
+    <condition property="XPP_HOME" value="${env.XPP_HOME}" else="${SDK}\xbase">
+      <isset property="env.XPP_HOME"/>
+      <!-- каталог локальной установки alaska xbase++ -->
+    </condition>
+  </target>
+  <target name="def" depends="pre-def">
+    <property name="build_jar" value="ibs-build.jar"/>
+    <typedef name="prglist" classname="PrgListTask" classpath="${build_jar}"/>
+    <!-- процедура загрузки масок файлов -->
+    <typedef name="readrmk" classname="ReadRmkTask" classpath="${build_jar}"/>
+    <!-- считывает свойства из rmk-файла -->
+    <typedef name="setprop" classname="SetPropTask" classpath="${build_jar}"/>
+    <!-- property/condition с переопределением -->
+    <typedef name="filekit" classname="FileKit" classpath="${build_jar}"/>
+    <!-- строит список масок файлов по шаблону -->
+    <typedef name="srclist" classname="SrcList" classpath="${build_jar}"/>
+    <!-- строит список файлов по списку масок -->
+    <typedef name="vcslog" classname="SvnInfoTask" classpath="${build_jar}"/>
+    <!-- получает информацию о версии -->
+    <typedef name="build" classname="BuildTask" classpath="${build_jar}"/>
+    <!-- запускает сборку для платформы -->
+    <taskdef name="jsign" classname="net.jsign.JsignTask" classpath="jsign-3.1.jar"/>
+    <property name="MAKE.OBJ" value="obj"/>
+    <!-- каталог сборки -->
+    <property name="COMPILE_OPT" value=""/>
+    <!-- пользовательские опции компиляции -->
+    <property name="INCLUDE_ADD" value=""/>
+    <!-- доп.каталоги поиска ch-файлов -->
+    <property name="PRGLIST" value="*"/>
+    <!-- список масок xpp-файлов -->
+    <property name="OBJLIST" value=""/>
+    <!-- список масок obj-файлов -->
+    <property name="LINK_OPT" value=""/>
+    <!-- пользовательские опции сборки -->
+    <property name="LIBLIST" value=""/>
+    <!-- список масок lib-файлов -->
+    <condition property="LIBPATH" value="${XPP_HOME}\xlib" else="${SRCPATH}\xlib">
+      <isset property="env.XPP_HOME"/>
+    </condition>
+    <property name="SRCLIBPATH" value="${SRCPATH}\xlib"/>
+    <!-- каталог установки библиотек -->
+    <property name="LIB_ADD" value=""/>
+    <!-- доп.каталоги поиска библиотек через ; -->
+    <property name="ARCLIST" value=""/>
+    <!-- список масок файлов ресурсов -->
+    <!-- список платформ сборки: xpp182,xpp190,harbour -->
+    <!--
+      <property name="XBASE"       value="xpp190"/>                  
+      -->
+    <condition property="XBASE" value="xpp190" else="xpp190">
+      <isset property="DEPLOY"/>
+    </condition>
+    <property name="failonerror" value="true"/>
+    <!-- останавливать сборку при ошибке build_exe -->
+    <dirname property="ant.dir" file="${ant.file}"/>
+    <readrmk file="${rmk.file}"/>
+    <condition property="IF_FIND_ADDON_DIR">
+      <!-- подключать файлы из под проектов -->
+      <and>
+        <not>
+          <isset property="DEPLOY"/>
+        </not>
+        <not>
+          <isset property="TEST"/>
+        </not>
+        <not>
+          <isset property="SKIP_ADDON"/>
+        </not>
+        <available file=".svn" type="dir">
+          <filepath>
+            <dirset dir="${basedir}" includes="**\*"/>
+          </filepath>
+        </available>
+      </and>
+    </condition>
+  </target>
+  <target name="find_addon_dir" if="IF_FIND_ADDON_DIR">
+    <exec executable="svn" dir="${basedir}" outputproperty="addon-dir">
+      <arg line="st -N"/>
+      <redirector>
+        <outputfilterchain>
+          <linecontains>
+            <contains value="?"/>
+          </linecontains>
+          <tokenfilter>
+            <replaceregex pattern=".{7}(.*)" replace="\1 "/>
+          </tokenfilter>
+          <striplinebreaks/>
+        </outputfilterchain>
+      </redirector>
+    </exec>
+    <condition property="IF_FIND_ADDON_PRG">
+      <not>
+        <equals arg1="${addon-dir}" arg2="" trim="true"/>
+      </not>
+    </condition>
+  </target>
+  <target name="find_addon_prg" if="IF_FIND_ADDON_PRG" depends="find_addon_dir">
+    <exec executable="svn" outputproperty="addon-prg">
+      <arg line="st ${addon-dir}"/>
+      <redirector>
+        <outputfilterchain>
+          <linecontains>
+            <contains value=".prg"/>
+            <contains value="\"/>
+          </linecontains>
+          <tokenfilter>
+            <replaceregex pattern=".{7}(.*)\.prg" replace="\1 "/>
+          </tokenfilter>
+          <striplinebreaks/>
+        </outputfilterchain>
+      </redirector>
+    </exec>
+  </target>
+  <target name="start" depends="def,find_addon_prg">
+    <condition property="project-target" value="deploy" else="build">
+      <isset property="DEPLOY"/>
+    </condition>
+    <build buildfile="project-build.xml" target="${project-target}"/>
+  </target>
+  <target name="test" depends="def,find_addon_prg">
+    <property name="TEST" value="true"/>
+    <setprop name="XPP" value="HYBRID"/>
+    <build buildfile="project-build.xml" target="test"/>
+  </target>
+  <target name="syntax" depends="def,find_addon_prg">
+    <build buildfile="project-build.xml" target="syntax"/>
+  </target>
+  <target name="debug" depends="def,find_addon_prg">
+    <setprop name="DEBUG" value="true"/>
+    <build buildfile="project-build.xml" target="build"/>
+  </target>
+  <target name="dfil" depends="pre-def" description="Устанавка приложения в филиалах">
+    <typedef name="dfil" classname="DFilTask" classpath="${build_jar}"/>
+    <dfil file="${file-to-deploy}" path="\\diamond\progfil" config="\\diamond\l\login\ibs.ini" errorproperty="dfil-error-log" xpp182="false" xpp190="true"/>
+    <condition property="user" value="${env.SVN_USER}" else="${user.name}">
+      <isset property="env.SVN_USER"/>
+    </condition>
+    <tstamp>
+      <format property="timestamp" pattern="dd/MM/yyyy HH:mm:ss"/>
+    </tstamp>
+    <echo file="${SRCPATH}\dfil.log" append="true" message="${timestamp} ${user} ${file-to-deploy}${line.separator}"/>
+  </target>
+  <!-- Восстановление приложения из бэкапа OLD\xpp190\ -->
+  <target name="dold" depends="pre-def" description="Восстановление приложения">
+    <property name="subdir" value="xpp190"/>
+    <property name="filepath" value="${work-path}\OLD\${subdir}\${file-to-undeploy}"/>
+    <condition property="user" value="${env.SVN_USER}" else="${user.name}">
+      <isset property="env.SVN_USER"/>
+    </condition>
+    <tstamp>
+      <format property="timestamp" pattern="dd/MM/yyyy HH:mm:ss"/>
+    </tstamp>
+    <length property="filesize" file="${filepath}"/>
+    <copy file="${filepath}" todir="${work-path}\${subdir}" overwrite="true" force="true" preservelastmodified="true" verbose="true"/>
+    <echo file="${SRCPATH}\deploy.log" append="true" message="${timestamp} from OLD ${file-to-undeploy} ${user} ${subdir} ${filesize}${line.separator}"/>
+  </target>
+  <!-- Первоначальное копирование xbase++ 1.9 и библиотек -->
+  <target name="init-local-xpp" depends="pre-def">
+    <fail unless="env.XPP_HOME" message="XPP_HOME not set"/>
+    <mkdir dir="${XPP_HOME}"/>
+    <sync todir="${XPP_HOME}\xppw32_190">
+      <fileset dir="${SDK}\xbase\xppw32_190"/>
+    </sync>
+    <mkdir dir="${XPP_HOME}\xlib\xpp190"/>
+    <sync todir="${XPP_HOME}\xlib\xpp190">
+      <fileset dir="${SRCPATH}\xlib\xpp190"/>
+    </sync>
+    <mkdir dir="${XPP_HOME}\xlib\common"/>
+    <sync todir="${XPP_HOME}\xlib\common">
+      <fileset dir="${SRCPATH}\xlib\common"/>
+    </sync>
+  </target>
+</project>

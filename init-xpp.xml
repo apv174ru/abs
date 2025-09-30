@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<project>
+  <target name="init_compile">
+    <property name="compile-cmd" value="${XPPPATH}\bin\xpp.exe"/>
+    <property name="compile-strict" value="/wi /wn /wu /D_NO_MEMVAR_"/>
+    <setprop name="compile-opt" value="${compile-opt} /dXMETRICS">
+      <isset property="XMETRICS"/>
+    </setprop>
+    <condition property="compile-arg" value="${compile-opt} /m /w /a /n /es /q /nod ${compile-strict}" else="${compile-opt} /m /w /a /n /es /q /nod /wn /wu /D_NO_MEMVAR_ /D_ALLOW_CURRENT_FILE_">
+      <isset property="WARNING"/>
+    </condition>
+    <property name="compile-syntax" value="/s /wn /wu /D_NO_MEMVAR_ /D_ALLOW_CURRENT_FILE_"/>
+    <property name="compile-inc" value="${XPPPATH}\include"/>
+    <property name="compile-path" value="${basedir};${compile-inc};${basedir}\ch;${SRCPATH}\ch;${INCLUDE_ADD}"/>
+  </target>
+  <target name="init_res">
+    <property name="res-cmd" value="${XPPPATH}\bin\arc.exe"/>
+    <property name="res-arg" value="/o:${res-filename} /x:resource ${ARCLIST} /q"/>
+    <condition property="IF_BUILD_RES">
+      <not>
+        <equals arg1="${ARCLIST}" arg2="" trim="true"/>
+      </not>
+    </condition>
+  </target>
+  <target name="init_lib">
+    <property name="lib-cmd" value="${SRCPATH}\xbin\lib.exe"/>
+    <property name="lib-arg" value="/out:${lib-filename} @${lnkfile} /NODEFAULTLIB"/>
+  </target>
+  <target name="init_exp">
+    <property name="filt-cmd" value="${XPPPATH}\bin\xppfilt.exe"/>
+    <property name="aimplib-cmd" value="${XPPPATH}\bin\aimplib.exe"/>
+  </target>
+  <target name="init_link">
+    <condition property="link-gui" value="/PM:PM" else="">
+      <or>
+        <equals arg1="${XPP}" arg2="HYBRID" casesensitive="false"/>
+        <equals arg1="${XPP}" arg2="GUI" casesensitive="false"/>
+      </or>
+    </condition>
+    <property name="lib-path" value="${XPPPATH}\lib"/>
+    <property name="link-cmd" value="${XPPPATH}\bin\alink.exe"/>
+    <property name="link-arg" value="/out:${exe-filename} ${link-opt} ${link-gui} @${lnkfile} ${xpp-lib} /NOLOGO"/>
+  </target>
+</project>
